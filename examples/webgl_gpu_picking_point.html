@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>three.js webgl - gpu - picking - point</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<style>
+		body {
+			color: #cccccc;
+			font-family: Monospace;
+			font-size: 13px;
+			text-align: center;
+			background-color: #050505;
+			margin: 0px;
+			overflow: hidden;
+		}
+		#info {
+			position: absolute;
+			top: 0px;
+			width: 100%;
+			padding: 5px;
+		}
+		a {
+			color: #0080ff;
+		}
+	</style>
+</head>
+<body>
+
+<div id="container"></div>
+<div id="info"><a href="http://threejs.org" target="_blank" rel="noopener">three.js</a> webgl - gpu - picking - point
+</div>
+
+<script type="module">
+/* 
+	Why use gpu to pick the object point?
+	1.Picking in cesium using gpu depth to calculate picking points，I think threejs can also have.
+	2.It is more efficient to calculate the picking point using gpu depth when the number of faces of a single model is large.
+	3.I can release the geometry data under the mesh, free more memory, and not affect the rendering.
+*/
+import * as THREE from '../build/three.module.js';
+import { GUI } from './jsm/libs/dat.gui.module.js';
+import { OrbitControls } from './jsm/controls/OrbitControls.js';
+var renderCamera, scene, renderer, pickingScene, gui;
+var mesh;
+var mesh1;
+var controls;
+var raycaster;
+var pickingCamera;
+var pickingTexture;	
+var GPUPickingPoint = new THREE.Vector3();
+var CPUPickingPoint = new THREE.Vector3();
+init();
+function init() {
+	//
+	raycaster = new THREE.Raycaster();
+	renderCamera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
+	pickingCamera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000 );
+	renderCamera.position.x = 200;
+	scene = new THREE.Scene();
+	pickingScene = new THREE.Scene();
+	//
+	var axesHelper = new THREE.AxesHelper( 100 );
+	scene.add( axesHelper );
+	//
+	// var geometry = new THREE.SphereBufferGeometry(100, 20, 20);
+	var geometry = new THREE.BoxBufferGeometry( 100, 100, 100 );
+	var material = new THREE.MeshNormalMaterial();
+	var depthMaterial = new THREE.MeshDepthMaterial();
+	depthMaterial.depthPacking = THREE.RGBADepthPacking;
+	mesh = new THREE.Mesh( geometry, material );
+	mesh1 = new THREE.Mesh( geometry, depthMaterial );
+	scene.add( mesh );
+	pickingScene.add( mesh1 );
+	//
+	renderer = new THREE.WebGLRenderer( { antialias: true, logarithmicDepthBuffer: true } );
+	renderer.setPixelRatio( window.devicePixelRatio );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	document.body.appendChild( renderer.domElement );
+	//
+	
+	pickingTexture = new THREE.WebGLRenderTarget(renderer.domElement.width, renderer.domElement.height);
+	//
+	gui = new GUI();
+	
+	// check this state,this is work for know.
+	//but if logarithmicDepthBuffer option work for MeshDepthMaterial,enable logarithmicDepthBuffer will make this example broken.
+	var depthBufferState= {};
+	depthBufferState.logarithmicDepthBuffer = renderer.capabilities.logarithmicDepthBuffer;
+	gui.add(depthBufferState, 'logarithmicDepthBuffer');
+	var GPUPFolder = gui.addFolder( 'GPUPickingPoint' );
+	GPUPFolder.open();
+	GPUPFolder.add( GPUPickingPoint, 'x' );
+	GPUPFolder.add( GPUPickingPoint, 'y' );
+	GPUPFolder.add( GPUPickingPoint, 'z' );
+	var CPUPFolder = gui.addFolder( 'CPUPickingPoint' );
+	CPUPFolder.open();
+	CPUPFolder.add( CPUPickingPoint, 'x' );
+	CPUPFolder.add( CPUPickingPoint, 'y' );
+	CPUPFolder.add( CPUPickingPoint, 'z' );
+	//
+	controls = new OrbitControls( renderCamera, renderer.domElement );
+	//
+	window.addEventListener( 'resize', onWindowResize, false );
+	renderer.domElement.addEventListener( 'click', pick );
+	controls.addEventListener( 'change', render );
+	render();
+}
+function pick( e ) {
+	var camera = renderCamera;
+	var x = e.clientX;
+	var y = renderer.domElement.height - e.clientY;
+	var pX = 2 * x / renderer.domElement.width - 1;
+	var pY = 2 * y / renderer.domElement.height - 1;
+	var mouseVector = new THREE.Vector2();
+	mouseVector.set(pX, pY); // set raycaster target
+	raycaster.setFromCamera( mouseVector, camera );
+	//render the picking scene off-screen
+	// set the view offset to represent just a single pixel under the mouse
+	camera.setViewOffset( renderer.domElement.width, renderer.domElement.height, e.clientX * window.devicePixelRatio | 0, e.clientY * window.devicePixelRatio | 0, 1, 1 );
+	// render the scene
+	renderer.setRenderTarget( pickingTexture );
+	renderer.render( pickingScene, camera );
+	// clear the view offset so rendering returns to normal
+	//create buffer for reading single pixel
+	var pixelBuffer = new Uint8Array( 4 );
+	//read the pixel
+	renderer.readRenderTargetPixels( pickingTexture, 0, 0, 1, 1, pixelBuffer );
+	camera.clearViewOffset();
+	//convert color to depth which between [0,1]
+	var temp = 256;
+	var depth = 0;
+	for ( var i = 3; i >= 0; -- i ) {
+		depth += pixelBuffer[ i ] / temp;
+		temp *= 256;
+	}
+	// compute the depth far from the camera which between [0,far];
+	depth = camera.near * camera.far / ( camera.near * depth + camera.far * ( 1 - depth ) );
+	var direction = raycaster.ray.direction.normalize();
+	var target = new THREE.Vector3();
+	camera.getWorldDirection( target );
+	var dist = depth / target.dot( raycaster.ray.direction );
+	GPUPickingPoint.addVectors( camera.position, new THREE.Vector3().copy( direction ).multiplyScalar( dist ) );
+	if ( depth > 100 ) {
+		camera = pickingCamera;
+		var pickingCameraPosition = new THREE.Vector3();
+		var pickingCameraLookAt = new THREE.Vector3();
+		//why is 0.999 ,when depth is 10000 the point error is 1~10,if big than that value,the result could be wrong
+		pickingCameraPosition.addVectors( renderCamera.position, new THREE.Vector3().copy( direction ).multiplyScalar( ( dist - camera.near ) * 0.999 ) );
+		pickingCameraLookAt.addVectors( renderCamera.position, new THREE.Vector3().copy( direction ).multiplyScalar( dist ) );
+		camera.position.copy( pickingCameraPosition );
+		camera.lookAt( pickingCameraLookAt );
+		renderer.setRenderTarget( pickingTexture );
+		renderer.render( pickingScene, camera );
+		renderer.readRenderTargetPixels( pickingTexture, renderer.domElement.width / 2, renderer.domElement.height / 2, 1, 1, pixelBuffer );
+		//
+		temp = 256;
+		depth = 0;
+		for ( var i = 3; i >= 0; -- i ) {
+			depth += pixelBuffer[ i ] / temp;
+			temp *= 256;
+		}
+		depth = camera.near * camera.far / ( camera.near * depth + camera.far * ( 1 - depth ) );
+		GPUPickingPoint.addVectors( camera.position, new THREE.Vector3().copy( direction ).multiplyScalar( depth ) );
+	}
+	var intersectObject = raycaster.intersectObject( mesh );
+	if ( intersectObject.length ) {
+		console.log( "far from camera:" + dist );
+		console.log( "cpu point from camera:" + new THREE.Vector3().subVectors( camera.position, CPUPickingPoint ).length() );
+		console.log( "gpu point from camera:" + new THREE.Vector3().subVectors( camera.position, GPUPickingPoint ).length() );
+		console.log( "GPU picking point" );
+		console.log( GPUPickingPoint );
+		console.log( "CPU picking point" );
+		CPUPickingPoint.copy( intersectObject[ 0 ].point );
+		console.log( CPUPickingPoint );
+		console.log( camera.position );
+		console.log( "points distance:" + new THREE.Vector3().subVectors( CPUPickingPoint, GPUPickingPoint ).length() );
+	}
+	renderer.setRenderTarget( null );
+	gui.updateDisplay();
+}
+function onWindowResize() {
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize( window.innerWidth, window.innerHeight );
+}
+//
+function render() {
+	renderer.render( scene, renderCamera );
+}
+</script>
+
+</body>
+</html>
