@@ -15,7 +15,7 @@ import { Object3D } from './../core/Object3D';
 import { Material } from './../materials/Material';
 import { Fog } from './../scenes/Fog';
 import { ToneMapping, ShadowMapType, CullFace } from '../constants';
-import { WebVRManager } from '../renderers/webvr/WebVRManager';
+import { WebXRManager } from '../renderers/webxr/WebXRManager';
 import { RenderTarget } from './webgl/WebGLRenderLists';
 import { Geometry } from './../core/Geometry';
 import { BufferGeometry } from './../core/BufferGeometry';
@@ -158,11 +158,6 @@ export class WebGLRenderer implements Renderer {
 	/**
 	 * Default is false.
 	 */
-	gammaInput: boolean;
-
-	/**
-	 * Default is false.
-	 */
 	gammaOutput: boolean;
 
 	physicallyCorrectLights: boolean;
@@ -196,7 +191,7 @@ export class WebGLRenderer implements Renderer {
 	renderLists: WebGLRenderLists;
 	state: WebGLState;
 
-	vr: WebVRManager;
+	xr: WebXRManager;
 
 	/**
 	 * Return the WebGL context.
@@ -324,7 +319,7 @@ export class WebGLRenderer implements Renderer {
 	): void;
 
 	/**
-	 * A build in function that can be used instead of requestAnimationFrame. For WebVR projects this function must be used.
+	 * A build in function that can be used instead of requestAnimationFrame. For WebXR projects this function must be used.
 	 * @param callback The function will be called every available frame. If `null` is passed it will stop any already ongoing animation.
 	 */
 	setAnimationLoop( callback: Function | null ): void;
@@ -428,6 +423,11 @@ export class WebGLRenderer implements Renderer {
 	 * @deprecated
 	 */
 	gammaFactor: number;
+
+	/**
+	 * @deprecated Use {@link WebGLRenderer#xr .xr} instead.
+	 */
+	vr: boolean;
 
 	/**
 	 * @deprecated Use {@link WebGLShadowMap#enabled .shadowMap.enabled} instead.

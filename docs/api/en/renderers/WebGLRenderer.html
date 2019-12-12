@@ -164,11 +164,6 @@
 		<h3>[property:Float gammaFactor]</h3>
 		<p>Default is *2*. </p>
 
-
-		<h3>[property:Boolean gammaInput]</h3>
-		<p>If set, then it expects that all textures and colors are premultiplied gamma. Default is *false*.</p>
-
-
 		<h3>[property:Boolean gammaOutput]</h3>
 		<p>If set, then it expects that all textures and colors need to be outputted in premultiplied gamma. Default is *false*.</p>
 
@@ -281,6 +276,16 @@
 		<h3>[property:Number toneMappingWhitePoint]</h3>
 		<p>
 		Tone mapping white point. Default is *1*.
+		</p>
+
+		<h3>[property:Object xr]</h3>
+		<p>
+		Provides access to the WebXR related interface of the renderer.
+		</p>
+
+		<h3>[property:Boolean xr.enabled]</h3>
+		<p>
+		Whether the renderer should enable XR rendering or not. Default is *false*.
 		</p>
 
 		<h2>Methods</h2>
@@ -431,7 +436,7 @@
 
 		<h3>[method:null setAnimationLoop]( [param:Function callback] )</h3>
 		<p>[page:Function callback] — The function will be called every available frame. If `null` is passed it will stop any already ongoing animation.</p>
-		<p>A built in function that can be used instead of [link:https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame requestAnimationFrame]. For WebVR projects this function must be used.</p>
+		<p>A built in function that can be used instead of [link:https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame requestAnimationFrame]. For WebXR projects this function must be used.</p>
 
 		<h3>[method:null setClearAlpha]( [param:Float alpha] )</h3>
 		<p>Sets the clear alpha. Valid input is a float between *0.0* and *1.0*.</p>
